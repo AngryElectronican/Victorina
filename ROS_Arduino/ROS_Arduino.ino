@@ -41,11 +41,14 @@ int SampleTime=10;
 
 #ifdef ROS
 ros::NodeHandle nh;
-void velCallback(  const geometry_msgs::Twist& vel)
+geometry_msgs::Twist motors_speed;
+void velCallback(  const geometry_msgs::Twist &vel)
 {
   Setpoint1 = vel.linear.x;
   Setpoint2=Setpoint1;
 }
+
+ros::Publisher actual_speed("actual_speed", &motors_speed);
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel" , velCallback);
 #endif
 
@@ -53,6 +56,8 @@ void setup() {
 #ifdef ROS
   nh.initNode();
   nh.subscribe(sub);
+  nh.advertise(actual_speed);
+
 #endif
   //Serial.begin(9600);
   
@@ -102,6 +107,8 @@ void loop() {
       velocity2=velocity2/dT;
       Input1=velocity1;
       Input2=velocity2;
+      motors_speed.linear.x=velocity1;
+      motors_speed.linear.y=velocity2;
       myPID1.Compute();
       myPID2.Compute();
       if(Setpoint1==0 && Setpoint2==0){
@@ -117,6 +124,8 @@ void loop() {
       //Serial.print(ticks1);Serial.print("\t");Serial.println(ticks2);
       //Serial.println("");
 #ifdef ROS
+motors_speed.publish( &motors_speed );
+
 nh.spinOnce();
 #endif
     }
