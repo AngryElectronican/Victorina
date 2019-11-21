@@ -1,9 +1,9 @@
 #define ROS
+
 #ifdef ROS
 #include <ros.h>
 #include <std_msgs/String.h>
 #include <geometry_msgs/Twist.h>
-
 #endif
 
 #include "PID_v1.h"
@@ -36,7 +36,7 @@ volatile long int enc1Ticks=0,enc2Ticks=0;
 long int ticks1=0,prev_ticks1=0, ticks2=0, prev_ticks2=0;
 long int dTicks1=0, dTicks2=0;
 long double currentTime=0,prevTime=0,dT=0;
-
+unsigned long reset_time=0;
 int SampleTime=10;
 
 #ifdef ROS
@@ -46,6 +46,9 @@ void velCallback(  const geometry_msgs::Twist &vel)
 {
   Setpoint1 = vel.linear.x;
   Setpoint2=Setpoint1;
+  if(vel.linear.x!=0){
+    reset_time=millis(); // reset for stop
+    }
 }
 
 ros::Publisher actual_speed("actual_speed", &motors_speed);
@@ -57,10 +60,7 @@ void setup() {
   nh.initNode();
   nh.subscribe(sub);
   nh.advertise(actual_speed);
-
 #endif
-  //Serial.begin(9600);
-  
   pinMode(enc1pinA, INPUT);
   pinMode(enc1pinB, INPUT);
   
@@ -84,6 +84,7 @@ void setup() {
   myPID2.SetSampleTime(SampleTime);
   myPID2.SetOutputLimits(-255,255);
   prevTime=millis();
+  reset_time=prev_time;
 }
 
 void loop() {
@@ -111,21 +112,16 @@ void loop() {
       motors_speed.linear.y=velocity2;
       myPID1.Compute();
       myPID2.Compute();
-      if(Setpoint1==0 && Setpoint2==0){
+      if(Setpoint1==0 && Setpoint2==0 &&(millis()-reset_time>=200)){ // reset for stop
         MotorSpeed(1,0);
         MotorSpeed(0,0);
       }else{
       MotorSpeed(1,Output1);
       MotorSpeed(0,Output2);
       }
-      //Serial.println("VELOCITYS");
-      //Serial.print(velocity1);Serial.print("\t");Serial.println(velocity2);
-      //Serial.println("TICKS");
-      //Serial.print(ticks1);Serial.print("\t");Serial.println(ticks2);
-      //Serial.println("");
+
 #ifdef ROS
 motors_speed.publish( &motors_speed );
-
 nh.spinOnce();
 #endif
     }
