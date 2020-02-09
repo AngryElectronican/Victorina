@@ -1,4 +1,5 @@
 #include "ModbusCRC.h"
+
 uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len)
 {
   uint16_t crc = 0xFFFF;
@@ -14,4 +15,16 @@ uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len)
     }
   }
   return crc;
+}
+void ModRTU_Init(){
+  DDRD|=1<<PD2;
+  DDRB|=1<<PB5;
+}
+void ModRTU_TX(){
+  PORTD|=1<<PD2;
+  PORTB|=1<<PB5;
+}
+void ModRTU_RX(){
+  PORTD&=~(1<<PD2);
+  PORTB&=~(1<<PB5);
 }

@@ -5,3 +5,4 @@
 #define READ_REGISTER 2
 #define WRITE_PIN 3
 #define END_RESPONSE 4
+#define ERROR_CYCLE 5
