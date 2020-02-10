@@ -1,6 +1,13 @@
 #pragma once
+#include <avr/interrupt.h>
 #include <inttypes.h>
+#include <stdlib.h>
 #include <avr/io.h>
+
+#include "Timer.h"
+#include "CircleBuffer.h"
+#include "USART.h"
+
 
 //Slave Address
 #define DEVICE_ADDRESS 10
@@ -11,17 +18,19 @@
 #define MULTUPLY_UNSUPPORTED_ERROR 0x04
 #define ADDRESS_NOT_MATCH_ERROR 0x05
 //States
-#define ADDRESS 0
-#define COMMAND 1
-#define READ_REGISTER 2
-#define WRITE_BIT 3
-#define END_RESPONSE 4
-#define ERROR_CYCLE 5
-
+enum states{
+    ADDRESS=0;,
+    COMMAND,
+    READ_REGISTER,
+    WRITE_BIT,
+    END_RESPONSE,
+    ERROR_CYCLE
+};
 
 uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len);
 void ModRTU_Write_Bits(uint32_t* bits);
 void ModRTU_Init(void);
 void ModRTU_TX(void);
 void ModRTU_RX(void);
+void ModRTU_Handler(void);
 
