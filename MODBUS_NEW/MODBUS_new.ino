@@ -104,12 +104,17 @@ int main(void){
             }
           if(Timer0_TimeIsOut(&timer1,frame_time)){
             if(error_code!=ADDRESS_NOT_MATCH_ERROR){
-              uint8_t *tx_data=(uint8_t*)malloc(2);
-              tx_data[0]=0x83;
-              tx_data[1]=error_code;
+             
+              uint8_t *tx_data=(uint8_t*)malloc(5);
+              tx_data[0]=rx_data[0];
+              tx_data[1]=0x80+rx_data[1];
+              tx_data[2]=error_code;
               error_code=0;
+              uint16_t CRC_tx=ModRTU_CRC(tx_data,3);
+              tx_data[3]=CRC_tx & 0xFF; //LOW byte
+              tx_data[4]=(CRC_tx>>8) & 0xFF; //HIGH byte
               ModRTU_TX();
-              for(uint8_t i=0;i<2;i++){
+              for(uint8_t i=0;i<5;i++){
                 USART_Write(tx_data+i);
                 Timer0_StartTimer(&timer1);
                 }
@@ -121,6 +126,7 @@ int main(void){
         break;
         case END_RESPONSE:
           if(Timer0_TimeIsOut(&timer2,frame_time)){
+            REGISTER[0]++;
             state=ADDRESS;
             rx_counter=0;
             ModRTU_RX();
