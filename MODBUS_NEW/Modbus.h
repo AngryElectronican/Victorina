@@ -20,6 +20,7 @@
 
 
 uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len);
+void ModRTU_Write_Bits(uint32_t* bits);
 void ModRTU_Init(void);
 void ModRTU_TX(void);
 void ModRTU_RX(void);
