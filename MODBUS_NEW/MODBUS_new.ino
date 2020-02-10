@@ -5,19 +5,20 @@
 #include "Timer.h"
 #include "CircleBuffer.h"
 #include "USART.h"
-#include "ModbusCRC.h"
-#include "States.h"
+#include "Modbus.h"
 
 uint8_t frame_time=4;
 Time timer1=0;
 Time timer2=0;
 CircleBUF FIFO;
 
-uint8_t rx_data[16];
 uint16_t REGISTER[16]={
   0x0000,0x0101,0x0202,0x0303,0x0404,0x0505,0x0606,0x0707,
   0x0808,0x0909,0x0A0A,0x0B0B,0x0C0C,0x0D0D,0x0E0E,0x0F0F
 };
+uint8_t output_bits=0x00;
+
+uint8_t rx_data[16];
 uint8_t state=ADDRESS;
 uint8_t rx_counter=0;
 uint8_t error_code=0;
@@ -56,6 +57,9 @@ int main(void){
             case 0x03:
               state=READ_REGISTER;
             break;
+            case 0x05:
+              state=WRITE_BIT;
+            break;
             default:
               error_code=0x01;
               state=ERROR_CYCLE;
@@ -93,6 +97,42 @@ int main(void){
               free(tx_data);
               Timer0_StartTimer(&timer2);
               state=END_RESPONSE;
+              }
+            }
+          }
+        break;
+        case WRITE_BIT:
+          if(buf_available(&FIFO)){
+            Timer0_StartTimer(&timer1);
+            rx_data[rx_counter]=buf_pull(&FIFO);
+            rx_counter++;
+            if(rx_counter>=8){
+              uint16_t CRC_rx=(uint16_t)(rx_data[rx_counter-1]<<8 | rx_data[rx_counter-2]);
+              uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
+                if(CRC_calc==CRC_rx){
+                  uint8_t data=0xEE;
+                  USART_Write(data);
+                  uint8_t tx_size=8;
+                  uint8_t *tx_data=(uint8_t*)malloc(tx_size);
+                  //uint16_t pin_address=rx_data[2]<<8 | rx_data[3];//6 max outputs
+                  uint8_t pin_address=0;
+                  if(rx_data[4]==0xFF && rx_data[5]==0x00 ){
+                    output_bits|=1<<pin_address;
+                  }else if(rx_data[4]==0x00 && rx_data[5]==0x00){
+                    output_bits&=~(1<<pin_address);
+                  }
+                  PORTD=output_bits<<2;
+                  for(uint8_t i=0;i<8;i++){
+                    tx_data[i]=rx_data[i];
+                  }
+                  ModRTU_TX();
+                  for(uint8_t i=0;i<8;i++){
+                    USART_Write(tx_data+i);
+                    Timer0_StartTimer(&timer1);
+                    }
+                  free(tx_data);
+                  Timer0_StartTimer(&timer2);
+                  state=END_RESPONSE;
               }
             }
           }
