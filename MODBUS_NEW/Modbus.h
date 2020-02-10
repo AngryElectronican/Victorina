@@ -8,7 +8,6 @@
 #include "CircleBuffer.h"
 #include "USART.h"
 
-
 //Slave Address
 #define DEVICE_ADDRESS 10
 //Error_codes
@@ -17,9 +16,11 @@
 #define QUANTILY_ERROR 0x03
 #define MULTUPLY_UNSUPPORTED_ERROR 0x04
 #define ADDRESS_NOT_MATCH_ERROR 0x05
+//REG QUANTILY
+#define REG_QUANTILY 16
 //States
 enum states{
-    ADDRESS=0;,
+    ADDRESS=0,
     COMMAND,
     READ_REGISTER,
     WRITE_BIT,

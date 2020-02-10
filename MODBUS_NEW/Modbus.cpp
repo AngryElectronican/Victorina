@@ -5,7 +5,8 @@ Time timer1=0;
 Time timer2=0;
 CircleBUF FIFO;
 
-uint16_t REGISTER[16]={
+
+uint16_t REGISTER[REG_QUANTILY]={
   0x0000,0x0101,0x0202,0x0303,0x0404,0x0505,0x0606,0x0707,
   0x0808,0x0909,0x0A0A,0x0B0B,0x0C0C,0x0D0D,0x0E0E,0x0F0F
 };
@@ -118,6 +119,17 @@ switch(state){
       uint16_t CRC_rx=(uint16_t)(rx_data[rx_counter-1]<<8 | rx_data[rx_counter-2]);
       uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
       if(CRC_calc==CRC_rx){
+
+        if(rx_data[5]<1 || rx_data[5]>REG_QUANTILY){
+          state=ERROR_CYCLE;
+          error_code=0x03;
+          break;
+        }
+        if((rx_data[3]>REG_QUANTILY) || ((rx_data[3]+rx_data[5])>REG_QUANTILY)){
+          state=ERROR_CYCLE;
+          error_code=0x02;
+          break; 
+        }
         uint8_t tx_size=5+rx_data[5]*2;
         uint8_t *tx_data=(uint8_t*)malloc(tx_size);
         tx_data[0]=rx_data[0];
