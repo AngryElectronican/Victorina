@@ -39,6 +39,35 @@ uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len)
   }
   return crc;
 }
+uint32_t ModRTU_Read_Bits(uint8_t* address,uint8_t* quantilly){
+  uint32_t bits=0;
+  uint8_t out_bit=0;
+  for(uint8_t i=*address;i<(*address)+(*quantilly);i++){
+    if((*address)>0 && (*address)<5){
+        if((PORTD>>i+3)&0x01){
+          bits|=1<<out_bit;
+        }else{
+          bits&=~(1<<out_bit);
+        }
+      }
+    if((*address)>5 && (*address)<11){
+        if((PORTB>>i)&0x01){
+          bits|=1<<out_bit;
+        }else{
+          bits&=~(1<<out_bit);
+        }
+    }
+    if((*address)>11 && (*address)<17){
+        if((PORTC>>i)&0x01){
+          bits|=1<<out_bit;
+        }else{
+          bits&=~(1<<out_bit);
+        }
+    }
+    out_bit++;
+  }
+  return bits;
+}
 void ModRTU_Write_Bits(uint32_t* bits){
   for(uint8_t i=3;i<8;i++){ // PD3,PD4,PD5,PD6,PD7
     DDRD|=1<<i;
@@ -97,8 +126,11 @@ switch(state){
     Timer0_StartTimer(&timer1);
     rx_data[rx_counter]=buf_pull(&FIFO);
     switch(rx_data[rx_counter]){
+      case 0x01:
+        state=READ_MULTIPLY_COILS;
+      break;
       case 0x03:
-        state=READ_REGISTER;
+        state=READ_MULTIPLY_REGISTERS;
       break;
       case 0x05:
         state=WRITE_BIT;
@@ -110,7 +142,46 @@ switch(state){
     rx_counter++;
     }
   break;
-  case READ_REGISTER:
+  case READ_MULTIPLY_COILS:
+    if(buf_available(&FIFO)){
+      Timer0_StartTimer(&timer1);
+      rx_data[rx_counter]=buf_pull(&FIFO);
+      rx_counter++;
+      if(rx_counter>=8){
+        uint16_t CRC_rx=(uint16_t)(rx_data[rx_counter-1]<<8 | rx_data[rx_counter-2]);
+        uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
+        if(CRC_calc==CRC_rx){
+          uint32_t read_bits=ModRTU_Read_Bits(&rx_data[3],&rx_data[5]);
+          uint8_t byte_count=0;
+          if(rx_data[5]%8){
+            byte_count=(rx_data[5]/8)+1;
+          }else{
+            byte_count=rx_data[5]/8;
+          }
+          uint8_t tx_size=5+byte_count;
+          uint8_t *tx_data=(uint8_t*)malloc(tx_size);
+          tx_data[0]=rx_data[0];
+          tx_data[1]=rx_data[1];
+          tx_data[2]=byte_count;
+          for(uint8_t i=0;i<byte_count;i++){
+            tx_data[i+3]=(read_bits>>(i*8))&0xFF;
+          }
+          uint16_t CRC_tx=ModRTU_CRC(tx_data,tx_size-2);
+          tx_data[tx_size-2]=CRC_tx & 0xFF; //LOW byte
+          tx_data[tx_size-1]=(CRC_tx>>8) & 0xFF; //HIGH byte
+          ModRTU_TX();
+          for(uint8_t i=0;i<tx_size;i++){
+            USART_Write(tx_data+i);
+            Timer0_StartTimer(&timer1);
+            }
+          free(tx_data);
+          Timer0_StartTimer(&timer2);
+          state=END_RESPONSE;
+        }
+      }
+    }
+  break;
+  case READ_MULTIPLY_REGISTERS:
   if(buf_available(&FIFO)){
     Timer0_StartTimer(&timer1);
     rx_data[rx_counter]=buf_pull(&FIFO);
@@ -172,6 +243,8 @@ switch(state){
             }else if(rx_data[4]==0x00 && rx_data[5]==0x00){
               output_bits&=~(1<<pin_address);
             }
+            DDRD|=1<<PD3;
+            PORTD|=1<<PD3;
             ModRTU_Write_Bits(&output_bits);
             for(uint8_t i=0;i<8;i++){
               tx_data[i]=rx_data[i];
