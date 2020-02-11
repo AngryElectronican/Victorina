@@ -42,22 +42,22 @@ uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len)
 uint32_t ModRTU_Read_Bits(uint8_t* address,uint8_t* quantilly){
   uint32_t bits=0;
   uint8_t out_bit=0;
-  for(uint8_t i=*address;i<(*address)+(*quantilly);i++){
-    if((*address)>0 && (*address)<5){
+  for(uint8_t i=(*address);i<(*address)+(*quantilly);i++){
+    if(i>=0 && i<5){
         if((PORTD>>i+3)&0x01){
           bits|=1<<out_bit;
         }else{
           bits&=~(1<<out_bit);
         }
       }
-    if((*address)>5 && (*address)<11){
+    if(i>=5 && i<11){
         if((PORTB>>i)&0x01){
           bits|=1<<out_bit;
         }else{
           bits&=~(1<<out_bit);
         }
     }
-    if((*address)>11 && (*address)<17){
+    if(i>=11 && i<17){
         if((PORTC>>i)&0x01){
           bits|=1<<out_bit;
         }else{
@@ -68,30 +68,33 @@ uint32_t ModRTU_Read_Bits(uint8_t* address,uint8_t* quantilly){
   }
   return bits;
 }
-void ModRTU_Write_Bits(uint32_t* bits){
-  for(uint8_t i=3;i<8;i++){ // PD3,PD4,PD5,PD6,PD7
-    DDRD|=1<<i;
-    if((((*bits)>>i)&0x01)==1){
-      PORTD|=1<<i;
+void ModRTU_Write_Bit(uint16_t* address,uint8_t* value){
+if((*address)>=0 && (*address)<5){
+  if(*value){
+    DDRD|=1<<((*address)+3);
+    PORTD|=1<<((*address)+3);
     }else{
-      PORTD&=~(1<<i);
-    }
+      DDRD|=1<<((*address)+3);
+      PORTD&=~(1<<((*address)+3));
+      }
   }
-  for(uint8_t i=0;i<6;i++){ //PB0,PB1,PB2,PB3,PB4,PB5
-    DDRB|=1<<i;
-    if((((*bits)>>(i+5))&0x01)==1){
-      PORTB|=1<<i;
+  if((*address)>=5 && (*address)<11){
+  if(*value){
+    DDRB|=1<<((*address)-5);
+    PORTB|=1<<((*address)-5);
     }else{
-      PORTB&=~(1<<i);
-    }
+      DDRD|=1<<((*address)-5);
+      PORTD&=~(1<<((*address)-5));
+      }
   }
-  for(uint8_t i=0;i<6;i++){
-    DDRC|=1<<i;
-    if((((*bits)>>(i+11))&0x01)==1){
-      PORTC|=1<<i;
+  if((*address)>=11 && (*address)<17){
+  if(*value){
+    DDRC|=1<<((*address)-11);
+    PORTC|=1<<((*address)-11);
     }else{
-      PORTC&=~(1<<i);
-    }
+      DDRC|=1<<((*address)-11);
+      PORTC&=~(1<<((*address)-11));
+      }
   }
 }
 
@@ -128,12 +131,13 @@ switch(state){
     switch(rx_data[rx_counter]){
       case 0x01:
         state=READ_MULTIPLY_COILS;
+        
       break;
       case 0x03:
         state=READ_MULTIPLY_REGISTERS;
       break;
       case 0x05:
-        state=WRITE_BIT;
+        state=WRITE_SINGLE_BIT;
       break;
       default:
         error_code=0x01;
@@ -226,7 +230,7 @@ switch(state){
       }
     }
   break;
-  case WRITE_BIT:
+  case WRITE_SINGLE_BIT:
     if(buf_available(&FIFO)){
       Timer0_StartTimer(&timer1);
       rx_data[rx_counter]=buf_pull(&FIFO);
@@ -238,14 +242,13 @@ switch(state){
             uint8_t tx_size=8;
             uint8_t *tx_data=(uint8_t*)malloc(tx_size);
             uint16_t pin_address=rx_data[2]<<8 | rx_data[3];//6 max outputs
+            uint8_t value=0;
             if(rx_data[4]==0xFF && rx_data[5]==0x00 ){
-              output_bits|=1<<pin_address;
+              value=1;
             }else if(rx_data[4]==0x00 && rx_data[5]==0x00){
-              output_bits&=~(1<<pin_address);
+              value=0;
             }
-            DDRD|=1<<PD3;
-            PORTD|=1<<PD3;
-            ModRTU_Write_Bits(&output_bits);
+            ModRTU_Write_Bit(&pin_address,&value);
             for(uint8_t i=0;i<8;i++){
               tx_data[i]=rx_data[i];
             }

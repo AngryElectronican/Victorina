@@ -24,16 +24,15 @@ enum states{
     COMMAND,
     READ_MULTIPLY_COILS,
     READ_MULTIPLY_REGISTERS,
-    WRITE_BIT,
+    WRITE_SINGLE_BIT,
     END_RESPONSE,
     ERROR_CYCLE
 };
 
 uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len);
 uint32_t ModRTU_Read_Bits(uint8_t* address,uint8_t* quantilly);
-void ModRTU_Write_Bits(uint32_t* bits);
+void ModRTU_Write_Bit(uint16_t* addr,uint8_t* value);
 void ModRTU_Init(void);
 void ModRTU_TX(void);
 void ModRTU_RX(void);
 void ModRTU_Handler(void);
-
