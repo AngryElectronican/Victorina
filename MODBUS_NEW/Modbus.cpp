@@ -98,57 +98,46 @@ if((*address)>=0 && (*address)<5){
   }
 }
 void ModRTU_Write_Multiply_Bits(uint16_t* address,uint16_t* quantily,uint8_t* rx_mass){ //////////
-  uint8_t *bit_buf=malloc(*quantily);
-  for(uint8_t i=0; i<(*quantily);i++){
-    bit_buf[i]=rx_mass[i+7];
+  uint8_t byte_count=0;
+  if((*quantily)%8){
+    byte_count=((*quantily)/8)+1;
+  }else{
+    byte_count=(*quantily)/8;
   }
-  for(uint8_t i=(*address);i<(*address)+(*quantily);i++){
-    if(i>=0 && i<5){
-      if((bit_buf[0]>>i)&0x01){
+  uint8_t* bits_buf=malloc(byte_count);
+  for(uint8_t i=0;i<byte_count;i++){
+    bits_buf[i]=rx_mass[i+7];
+  }
+    for(uint8_t i=(*address);i<(*quantily)+(*address);i++){
+      uint8_t byte_num=(i-(*address))/8;
+      if(i>=0 && i<5){
+        if((bits_buf[byte_num]>>((*quantily)-byte_num*8-1))&0x01){
         DDRD|=1<<(i+3);
         PORTD|=1<<(i+3);
-      }else{
-        DDRD|=1<<(i+3);
-        PORTD&=~(1<<(i+3));
+        }else{
+          DDRD|=1<<(i+3);
+          PORTD&=~(1<<(i+3));
+          }
+        }
+      if(i>=5 && i<11){
+        if((bits_buf[byte_num]>>((*quantily)-byte_num*8-1))&0x01){
+          DDRB|=1<<(i-5);
+          PORTB|=1<<(i-5);
+          }else{
+            DDRB|=1<<(i-5);
+            PORTB&=~(1<<(i-5));
+            }
+        }
+      if(i>=11 && i<17){
+        if((bits_buf[byte_num]>>((*quantily)-byte_num*8-1))&0x01){
+          DDRC|=1<<(i-11);
+          PORTC|=1<<(i-11);
+          }else{
+            DDRC|=1<<(i-11);
+            PORTC&=~(1<<(i-11));
+            }
+        }
       }
-    }
-    if(i>=5 && i<8){
-      if((bit_buf[0]>>i)&0x01){
-        DDRB|=1<<(i-5);
-        PORTB|=1<<(i-5);
-      }else{
-        DDRB|=1<<(i-5);
-        PORTB&=~(1<<(i-5));
-      }
-    }
-    if(i>=8 && i<11){
-      if((bit_buf[1]>>(i-8))&0x01){
-        DDRB|=1<<(i-5);
-        PORTB|=1<<(i-5);
-      }else{
-        DDRB|=1<<(i-5);
-        PORTB&=~(1<<(i-5));
-      }
-    }
-    if(i>=11 && i<16){
-      if((bit_buf[1]>>(i-8))&0x01){
-        DDRC|=1<<(i-11);
-        PORTC|=1<<(i-11);
-      }else{
-        DDRC|=1<<(i-11);
-        PORTC&=~(1<<(i-11));
-      }
-    }
-    if(i>=16){
-      if((bit_buf[2]>>(i-16))&0x01){
-        DDRC|=1<<(i-11);
-        PORTC|=1<<(i-11);
-      }else{
-        DDRC|=1<<(i-11);
-        PORTC&=~(1<<(i-11));
-      }
-    }
-  }
 }
 void ModRTU_Init(){
   DDRD|=1<<PD2;
@@ -335,8 +324,8 @@ switch(state){
           uint8_t tx_size=8;
           uint8_t *tx_data=(uint8_t*)malloc(tx_size);
           uint16_t start_address=rx_data[2]<<8 | rx_data[3];//6 max outputs
-          uint16_t bit_quantily=quontily_bytes;
-          ModRTU_Write_Multiply_Bits(& start_address,&bit_quantily,rx_data);
+          uint16_t bit_quantily=(rx_data[4]<<8)+rx_data[5];
+          ModRTU_Write_Multiply_Bits(&start_address,&bit_quantily,rx_data);
           for(uint8_t i=0;i<6;i++){
             tx_data[i]=rx_data[i];
           }
