@@ -39,10 +39,12 @@ uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len)
   }
   return crc;
 }
-uint32_t ModRTU_Read_Bits(uint8_t* address,uint8_t* quantilly){
+uint32_t ModRTU_Read_Bits(uint8_t* rx_data){
+  uint16_t address=rx_data[2]<<8 | rx_data[3];//6 max outputs
+  uint16_t quantily=(rx_data[4]<<8)+rx_data[5];
   uint32_t bits=0;
   uint8_t out_bit=0;
-  for(uint8_t i=(*address);i<(*address)+(*quantilly);i++){
+  for(uint8_t i=address;i<address+quantily;i++){
     if(i>=0 && i<5){
         if((PORTD>>i+3)&0x01){
           bits|=1<<out_bit;
@@ -56,62 +58,71 @@ uint32_t ModRTU_Read_Bits(uint8_t* address,uint8_t* quantilly){
         }else{
           bits&=~(1<<out_bit);
         }
-    }
+      }
     if(i>=11 && i<17){
         if((PORTC>>i-11)&0x01){
           bits|=1<<out_bit;
         }else{
           bits&=~(1<<out_bit);
         }
-    }
+      }
     out_bit++;
   }
   return bits;
 }
-void ModRTU_Write_Bit(uint16_t* address,uint8_t* value){
-if((*address)>=0 && (*address)<5){
-  if(*value){
-    DDRD|=1<<((*address)+3);
-    PORTD|=1<<((*address)+3);
-    }else{
-      DDRD|=1<<((*address)+3);
-      PORTD&=~(1<<((*address)+3));
+void ModRTU_Write_Bit(uint8_t* rx_data){
+  uint16_t address=rx_data[2]<<8 | rx_data[3];//6 max outputs
+  uint8_t value=0;
+  if(rx_data[4]==0xFF && rx_data[5]==0x00 ){
+    value=1;
+    }else if(rx_data[4]==0x00 && rx_data[5]==0x00){
+      value=0;
       }
-  }
-  if((*address)>=5 && (*address)<11){
-  if(*value){
-    DDRB|=1<<((*address)-5);
-    PORTB|=1<<((*address)-5);
+if(address>=0 && address<5){
+  if(value){
+    DDRD|=1<<(address+3);
+    PORTD|=1<<(address+3);
     }else{
-      DDRB|=1<<((*address)-5);
-      PORTB&=~(1<<((*address)-5));
+      DDRD|=1<<(address+3);
+      PORTD&=~(1<<(address+3));
       }
-  }
-  if((*address)>=11 && (*address)<17){
-  if(*value){
-    DDRC|=1<<((*address)-11);
-    PORTC|=1<<((*address)-11);
+    }
+  if(address>=5 && address<11){
+  if(value){
+    DDRB|=1<<(address-5);
+    PORTB|=1<<(address-5);
     }else{
-      DDRC|=1<<((*address)-11);
-      PORTC&=~(1<<((*address)-11));
+      DDRB|=1<<(address-5);
+      PORTB&=~(1<<(address-5));
+      }
+    }
+  if(address>=11 && address<17){
+  if(value){
+    DDRC|=1<<(address-11);
+    PORTC|=1<<(address-11);
+    }else{
+      DDRC|=1<<(address-11);
+      PORTC&=~(1<<(address-11));
       }
   }
 }
-void ModRTU_Write_Multiply_Bits(uint16_t* address,uint16_t* quantily,uint8_t* rx_mass){ //////////
+void ModRTU_Write_Multiply_Bits(uint8_t* rx_mass){ //////////
+  uint16_t address=rx_data[2]<<8 | rx_data[3];//6 max outputs
+  uint16_t quantily=(rx_data[4]<<8)+rx_data[5];
   uint8_t byte_count=0;
-  if((*quantily)%8){
-    byte_count=((*quantily)/8)+1;
+  if(quantily%8){
+    byte_count=(quantily/8)+1;
   }else{
-    byte_count=(*quantily)/8;
+    byte_count=quantily/8;
   }
   uint8_t* bits_buf=malloc(byte_count);
   for(uint8_t i=0;i<byte_count;i++){
     bits_buf[i]=rx_mass[i+7];
   }
-    for(uint8_t i=(*address);i<(*quantily)+(*address);i++){
-      uint8_t byte_num=(i-(*address))/8;
+    for(uint8_t i=address;i<quantily+address;i++){
+      uint8_t byte_num=(i-address)/8;
       if(i>=0 && i<5){
-        if((bits_buf[byte_num]>>((*quantily)-byte_num*8-1))&0x01){
+        if((bits_buf[byte_num]>>(quantily-byte_num*8-1))&0x01){
         DDRD|=1<<(i+3);
         PORTD|=1<<(i+3);
         }else{
@@ -120,7 +131,7 @@ void ModRTU_Write_Multiply_Bits(uint16_t* address,uint16_t* quantily,uint8_t* rx
           }
         }
       if(i>=5 && i<11){
-        if((bits_buf[byte_num]>>((*quantily)-byte_num*8-1))&0x01){
+        if((bits_buf[byte_num]>>(quantily-byte_num*8-1))&0x01){
           DDRB|=1<<(i-5);
           PORTB|=1<<(i-5);
           }else{
@@ -129,7 +140,7 @@ void ModRTU_Write_Multiply_Bits(uint16_t* address,uint16_t* quantily,uint8_t* rx
             }
         }
       if(i>=11 && i<17){
-        if((bits_buf[byte_num]>>((*quantily)-byte_num*8-1))&0x01){
+        if((bits_buf[byte_num]>>(quantily-byte_num*8-1))&0x01){
           DDRC|=1<<(i-11);
           PORTC|=1<<(i-11);
           }else{
@@ -152,6 +163,7 @@ void ModRTU_RX(){
   //PORTB&=~(1<<PB5);
 }
 void ModRTU_Handler(void){
+  
 switch(state){
   case ADDRESS:
     if(buf_available(&FIFO)){
@@ -172,7 +184,6 @@ switch(state){
     switch(rx_data[rx_counter]){
       case 0x01:
         state=READ_MULTIPLY_BITS;
-        
       break;
       case 0x03:
         state=READ_MULTIPLY_REGISTERS;
@@ -199,7 +210,7 @@ switch(state){
         uint16_t CRC_rx=(uint16_t)(rx_data[rx_counter-1]<<8 | rx_data[rx_counter-2]);
         uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
         if(CRC_calc==CRC_rx){
-          uint32_t read_bits=ModRTU_Read_Bits(&rx_data[3],&rx_data[5]);
+          uint32_t read_bits=ModRTU_Read_Bits(rx_data);
           uint8_t byte_count=0;
           if(rx_data[5]%8){
             byte_count=(rx_data[5]/8)+1;
@@ -285,14 +296,7 @@ switch(state){
           if(CRC_calc==CRC_rx){
             uint8_t tx_size=8;
             uint8_t *tx_data=(uint8_t*)malloc(tx_size);
-            uint16_t pin_address=rx_data[2]<<8 | rx_data[3];//6 max outputs
-            uint8_t value=0;
-            if(rx_data[4]==0xFF && rx_data[5]==0x00 ){
-              value=1;
-            }else if(rx_data[4]==0x00 && rx_data[5]==0x00){
-              value=0;
-            }
-            ModRTU_Write_Bit(&pin_address,&value);
+            ModRTU_Write_Bit(rx_data);
             for(uint8_t i=0;i<8;i++){
               tx_data[i]=rx_data[i];
             }
@@ -323,9 +327,7 @@ switch(state){
         if(CRC_calc==CRC_rx){
           uint8_t tx_size=8;
           uint8_t *tx_data=(uint8_t*)malloc(tx_size);
-          uint16_t start_address=rx_data[2]<<8 | rx_data[3];//6 max outputs
-          uint16_t bit_quantily=(rx_data[4]<<8)+rx_data[5];
-          ModRTU_Write_Multiply_Bits(&start_address,&bit_quantily,rx_data);
+          ModRTU_Write_Multiply_Bits(rx_data);
           for(uint8_t i=0;i<6;i++){
             tx_data[i]=rx_data[i];
           }
@@ -373,6 +375,7 @@ switch(state){
   break;
   case END_RESPONSE:
     if(Timer0_TimeIsOut(&timer2,frame_time)){
+      REGISTER[0]++;
       state=ADDRESS;
       rx_counter=0;
       ModRTU_RX();
