@@ -2,7 +2,7 @@
 #include <inttypes.h>
 #include <avr/io.h>
 
-#define SIZE 16
+#define SIZE 32
 #define MASK SIZE-1
 struct CircleBUF{
   volatile uint8_t head=0;

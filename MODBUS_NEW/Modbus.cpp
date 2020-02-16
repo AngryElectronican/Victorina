@@ -23,6 +23,18 @@ ISR(USART_RX_vect){
   buf_push(&FIFO,UDR0);
   UCSR0B|=1<<RXCIE0;
 }
+void ModRTU_Init(){
+  DDRD|=1<<PD2; // TX/RX pin
+  USART_Init();
+  Timer0_Init();
+  sei();
+}
+void ModRTU_TX(){
+  PORTD|=1<<PD2;
+}
+void ModRTU_RX(){
+  PORTD&=~(1<<PD2);
+}
 uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len)
 {
   uint16_t crc = 0xFFFF;
@@ -40,34 +52,43 @@ uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len)
   return crc;
 }
 uint32_t ModRTU_Read_Bits(uint8_t* rx_data){
-  uint16_t address=rx_data[2]<<8 | rx_data[3];//6 max outputs
-  uint16_t quantily=(rx_data[4]<<8)+rx_data[5];
+  uint16_t address=rx_data[2]<<8 | rx_data[3];
+  uint16_t quantily=(rx_data[4]<<8) | rx_data[5];
   uint32_t bits=0;
   uint8_t out_bit=0;
+  uint32_t new_byte=0;//WTFFF?????
   for(uint8_t i=address;i<address+quantily;i++){
     if(i>=0 && i<5){
-        if((PORTD>>i+3)&0x01){
+        if((PIND>>(i+3))&0x01){
           bits|=1<<out_bit;
         }else{
           bits&=~(1<<out_bit);
         }
       }
-    if(i>=5 && i<11){
-        if((PORTB>>i-5)&0x01){
+    else if(i>=5 && i<11){
+        if((PINB>>(i-5))&0x01){
           bits|=1<<out_bit;
         }else{
           bits&=~(1<<out_bit);
         }
       }
-    if(i>=11 && i<17){
-        if((PORTC>>i-11)&0x01){
+    else if(i>=11 && i<16){
+        if((PINC>>(i-11))&0x01){
           bits|=1<<out_bit;
         }else{
           bits&=~(1<<out_bit);
+        }
+      }
+      else if(i==16){
+        if((PINC>>(i-11))&0x01){
+          new_byte|=1<<(out_bit-16);
+        }else{
+          new_byte&=~(1<<out_bit-16);///WTF
         }
       }
     out_bit++;
   }
+  bits=(bits)|(new_byte<<16);//WTFFFF
   return bits;
 }
 void ModRTU_Write_Bit(uint8_t* rx_data){
@@ -107,14 +128,9 @@ if(address>=0 && address<5){
   }
 }
 void ModRTU_Write_Multiply_Bits(uint8_t* rx_mass){ //////////
-  uint16_t address=rx_data[2]<<8 | rx_data[3];//6 max outputs
-  uint16_t quantily=(rx_data[4]<<8)+rx_data[5];
-  uint8_t byte_count=0;
-  if(quantily%8){
-    byte_count=(quantily/8)+1;
-  }else{
-    byte_count=quantily/8;
-  }
+  uint16_t address=rx_data[2]<<8 | rx_data[3];
+  uint16_t quantily=(rx_data[4]<<8)|rx_data[5];
+  uint8_t byte_count=rx_data[6];
   uint8_t* bits_buf=malloc(byte_count);
   for(uint8_t i=0;i<byte_count;i++){
     bits_buf[i]=rx_mass[i+7];
@@ -149,18 +165,6 @@ void ModRTU_Write_Multiply_Bits(uint8_t* rx_mass){ //////////
             }
         }
       }
-}
-void ModRTU_Init(){
-  DDRD|=1<<PD2;
-  DDRB|=1<<PB5;
-}
-void ModRTU_TX(){
-  PORTD|=1<<PD2;
-  //PORTB|=1<<PB5;
-}
-void ModRTU_RX(){
-  PORTD&=~(1<<PD2);
-  //PORTB&=~(1<<PB5);
 }
 void ModRTU_Handler(void){
   
@@ -212,10 +216,10 @@ switch(state){
         if(CRC_calc==CRC_rx){
           uint32_t read_bits=ModRTU_Read_Bits(rx_data);
           uint8_t byte_count=0;
-          if(rx_data[5]%8){
-            byte_count=(rx_data[5]/8)+1;
+          if(((rx_data[4]<<8) | rx_data[5])%8){
+            byte_count=(((rx_data[4]<<8) | rx_data[5])/8)+1;
           }else{
-            byte_count=rx_data[5]/8;
+            byte_count=((rx_data[4]<<8) | rx_data[5])/8;
           }
           uint8_t tx_size=5+byte_count;
           uint8_t *tx_data=(uint8_t*)malloc(tx_size);
