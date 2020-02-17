@@ -51,45 +51,36 @@ uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len)
   }
   return crc;
 }
-uint32_t ModRTU_Read_Bits(uint8_t* rx_data){
+void ModRTU_Read_Bits(uint8_t* rx_data, uint8_t* bits){
   uint16_t address=rx_data[2]<<8 | rx_data[3];
   uint16_t quantily=(rx_data[4]<<8) | rx_data[5];
-  uint32_t bits=0;
   uint8_t out_bit=0;
-  uint32_t new_byte=0;//WTFFF?????
+  uint8_t byte_count=0;
   for(uint8_t i=address;i<address+quantily;i++){
+    byte_count=out_bit/8;
     if(i>=0 && i<5){
         if((PIND>>(i+3))&0x01){
-          bits|=1<<out_bit;
+          bits[byte_count]|=1<<(out_bit-8*byte_count);
         }else{
-          bits&=~(1<<out_bit);
+          bits[byte_count]&=~(1<<(out_bit-8*byte_count));
         }
       }
     else if(i>=5 && i<11){
         if((PINB>>(i-5))&0x01){
-          bits|=1<<out_bit;
+          bits[byte_count]|=1<<(out_bit-8*byte_count);
         }else{
-          bits&=~(1<<out_bit);
+          bits[byte_count]&=~(1<<(out_bit-8*byte_count));
         }
       }
-    else if(i>=11 && i<16){
+    else if(i>=11 && i<17){
         if((PINC>>(i-11))&0x01){
-          bits|=1<<out_bit;
+          bits[byte_count]|=1<<(out_bit-8*byte_count);
         }else{
-          bits&=~(1<<out_bit);
-        }
-      }
-      else if(i==16){
-        if((PINC>>(i-11))&0x01){
-          new_byte|=1<<(out_bit-16);
-        }else{
-          new_byte&=~(1<<out_bit-16);///WTF
+          bits[byte_count]&=~(1<<(out_bit-8*byte_count));
         }
       }
     out_bit++;
   }
-  bits=(bits)|(new_byte<<16);//WTFFFF
-  return bits;
 }
 void ModRTU_Write_Bit(uint8_t* rx_data){
   uint16_t address=rx_data[2]<<8 | rx_data[3];//6 max outputs
@@ -165,6 +156,7 @@ void ModRTU_Write_Multiply_Bits(uint8_t* rx_mass){ //////////
             }
         }
       }
+      free(bits_buf);
 }
 void ModRTU_Handler(void){
   
@@ -214,20 +206,36 @@ switch(state){
         uint16_t CRC_rx=(uint16_t)(rx_data[rx_counter-1]<<8 | rx_data[rx_counter-2]);
         uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
         if(CRC_calc==CRC_rx){
-          uint32_t read_bits=ModRTU_Read_Bits(rx_data);
+		  uint16_t bits_quantily=(rx_data[4]<<8) | (rx_data[5]);
+		  if((bits_quantily==0) || (bits_quantily<32)){
+			state=ERROR_CYCLE;
+			error_code=0x03;
+			break;
+		  }
+		  uint16_t starting_address=(rx_data[2]<<8) | (rx_data[3]);
+		  if((starting_address>32) || (bits_quantily+starting_address>32)){
+			state=ERROR_CYCLE;
+			error_code=0x02;
+			break;
+		  }
           uint8_t byte_count=0;
           if(((rx_data[4]<<8) | rx_data[5])%8){
             byte_count=(((rx_data[4]<<8) | rx_data[5])/8)+1;
           }else{
             byte_count=((rx_data[4]<<8) | rx_data[5])/8;
           }
+          uint8_t* read_bits=malloc(byte_count);
+          for(uint8_t i=0;i<byte_count;i++){
+            read_bits[i]=0x00;
+          }
+          ModRTU_Read_Bits(rx_data,read_bits);
           uint8_t tx_size=5+byte_count;
           uint8_t *tx_data=(uint8_t*)malloc(tx_size);
           tx_data[0]=rx_data[0];
           tx_data[1]=rx_data[1];
           tx_data[2]=byte_count;
           for(uint8_t i=0;i<byte_count;i++){
-            tx_data[i+3]=(read_bits>>(i*8))&0xFF;
+            tx_data[i+3]=read_bits[i];
           }
           uint16_t CRC_tx=ModRTU_CRC(tx_data,tx_size-2);
           tx_data[tx_size-2]=CRC_tx & 0xFF; //LOW byte
@@ -238,6 +246,7 @@ switch(state){
             Timer0_StartTimer(&timer1);
             }
           free(tx_data);
+          free(read_bits);
           Timer0_StartTimer(&timer2);
           state=END_RESPONSE;
         }
@@ -253,13 +262,14 @@ switch(state){
       uint16_t CRC_rx=(uint16_t)(rx_data[rx_counter-1]<<8 | rx_data[rx_counter-2]);
       uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
       if(CRC_calc==CRC_rx){
-
-        if(rx_data[5]<1 || rx_data[5]>REG_QUANTILY){
+		uint16_t bits_quantily=(rx_data[4]<<8) | (rx_data[5]);
+        if(bits_quantily<1 || bits_quantily>REG_QUANTILY){
           state=ERROR_CYCLE;
           error_code=0x03;
           break;
         }
-        if((rx_data[3]>REG_QUANTILY) || ((rx_data[3]+rx_data[5])>REG_QUANTILY)){
+		uint16_t starting_address=(rx_data[2]<<8) | (rx_data[3]);
+        if((starting_address>REG_QUANTILY) || ((bits_quantily+starting_address)>REG_QUANTILY)){
           state=ERROR_CYCLE;
           error_code=0x02;
           break; 
@@ -298,6 +308,17 @@ switch(state){
         uint16_t CRC_rx=(uint16_t)(rx_data[rx_counter-1]<<8 | rx_data[rx_counter-2]);
         uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
           if(CRC_calc==CRC_rx){
+			if(!(rx_data[4]==0xFF && rx_data[5]==0x00)&& !(rx_data[4]==0x00 && rx_data[5]==0x00) ){
+				state=ERROR_CYCLE;
+				error_code=0x03;
+				break;
+				}
+			uint16_t starting_address=(rx_data[2]<<8) | (rx_data[3]);
+			if(starting_address>17){
+				state=ERROR_CYCLE;
+				error_code=0x02;
+				break;
+				}
             uint8_t tx_size=8;
             uint8_t *tx_data=(uint8_t*)malloc(tx_size);
             ModRTU_Write_Bit(rx_data);
@@ -329,6 +350,24 @@ switch(state){
       uint16_t CRC_rx=(uint16_t)(rx_data[rx_counter-1]<<8 | rx_data[rx_counter-2]);
       uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
         if(CRC_calc==CRC_rx){
+		  uint16_t bits_quantily=(rx_data[4]<<8) | (rx_data[5]);
+		  uint8_t byte_count=0;
+		  if(bits_quantily%8){
+			  byte_count=(bits_quantily/8)+1;
+		  }else{
+			  byte_count=bits_quantily/8;
+		  }
+		  if(bits_quantily<1 || bits_quantily>17 || byte_count!=rx_data[6]){
+				state=ERROR_CYCLE;
+				error_code=0x03;
+				break;
+		  }
+		  uint16_t starting_address=(rx_data[2]<<8) | (rx_data[3]);
+		  if(starting_address>32 || starting_address+bits_quantily>32){
+				state=ERROR_CYCLE;
+				error_code=0x02;
+				break;  
+		  }
           uint8_t tx_size=8;
           uint8_t *tx_data=(uint8_t*)malloc(tx_size);
           ModRTU_Write_Multiply_Bits(rx_data);

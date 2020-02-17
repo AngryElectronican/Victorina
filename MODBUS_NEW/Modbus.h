@@ -31,7 +31,7 @@ enum states{
 };
 
 uint16_t ModRTU_CRC(uint8_t* buf, uint8_t len);
-uint32_t ModRTU_Read_Bits(uint8_t* rx_mass);
+void ModRTU_Read_Bits(uint8_t* rx_mass, uint8_t* bits);
 void ModRTU_Write_Bit(uint8_t* rx_mass);
 void ModRTU_Write_Multiply_Bits(uint8_t* rx_mass);
 void ModRTU_Init(void);
