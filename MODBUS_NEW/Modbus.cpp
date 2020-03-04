@@ -13,7 +13,7 @@ uint16_t REGISTER[REG_QUANTILY]={
 //uint16_t REGISTER[16]={0};
 uint32_t output_bits=0x0000;
 
-uint8_t rx_data[16];
+uint8_t rx_data[32];
 uint8_t state=ADDRESS;
 uint8_t rx_counter=0;
 uint8_t error_code=0;
@@ -165,6 +165,7 @@ switch(state){
     if(buf_available(&FIFO)){
     Timer0_StartTimer(&timer1);
     rx_data[rx_counter]=buf_pull(&FIFO);
+
     if(rx_data[rx_counter]!=DEVICE_ADDRESS){
       error_code=ADDRESS_NOT_MATCH_ERROR;
       }else{
@@ -189,6 +190,9 @@ switch(state){
       break;
       case 0x0F:
         state=WRITE_MULTIPLY_BIT;
+      break;
+      case 0x10:
+        state=WRITE_MULTIPLY_REGISTER;
       break;
       default:
         error_code=0x01;
@@ -342,11 +346,11 @@ switch(state){
     Timer0_StartTimer(&timer1);
     rx_data[rx_counter]=buf_pull(&FIFO);
     rx_counter++;
-    static uint8_t quontily_bytes=0;
+    static uint8_t quantily_bytes=0;
     if(rx_counter==7){
-      quontily_bytes=rx_data[6]+9;
+      quantily_bytes=rx_data[6]+9;
     }
-    if(rx_counter>=quontily_bytes){
+    if(rx_counter>=quantily_bytes){
       uint16_t CRC_rx=(uint16_t)(rx_data[rx_counter-1]<<8 | rx_data[rx_counter-2]);
       uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
         if(CRC_calc==CRC_rx){
@@ -359,13 +363,13 @@ switch(state){
 		  }
 		  if(bits_quantily<1 || bits_quantily>17 || byte_count!=rx_data[6]){
 				state=ERROR_CYCLE;
-				error_code=0x03;
+				error_code=QUANTILY_ERROR;
 				break;
 		  }
 		  uint16_t starting_address=(rx_data[2]<<8) | (rx_data[3]);
 		  if(starting_address>32 || starting_address+bits_quantily>32){
 				state=ERROR_CYCLE;
-				error_code=0x02;
+				error_code=ADDRESSING_ERROR;
 				break;  
 		  }
           uint8_t tx_size=8;
@@ -388,6 +392,57 @@ switch(state){
       }
     }
   }
+  break;
+  case WRITE_MULTIPLY_REGISTER:
+    if(buf_available(&FIFO)){
+      Timer0_StartTimer(&timer1);
+      rx_data[rx_counter]=buf_pull(&FIFO);
+      rx_counter++;
+      static uint8_t quantily_bytes=0;
+      if(rx_counter==7){
+        quantily_bytes=rx_data[6]+9;
+      }
+      if(rx_counter>=quantily_bytes){
+        uint16_t CRC_rx=(uint16_t)(rx_data[rx_counter-1]<<8 | rx_data[rx_counter-2]);
+        uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
+          if(CRC_calc==CRC_rx){
+            uint16_t quantily_of_registers=rx_data[4]<<8 | rx_data[5];
+
+            uint8_t data=(uint8_t)quantily_of_registers;
+            USART_Write(&data);
+            data=rx_data[6];
+            USART_Write(&data);
+            if((quantily_of_registers<1 || quantily_of_registers>16)||((quantily_of_registers*2) != (rx_data[6]))){
+              state=ERROR_CYCLE;
+              error_code=QUANTILY_ERROR;
+              break;
+              }
+            uint16_t starting_address=(rx_data[2]<<8) | (rx_data[3]);
+            if((starting_address>16) || (starting_address+quantily_of_registers>16)){
+              state=ERROR_CYCLE;
+              error_code=ADDRESSING_ERROR;
+              break;
+              }
+              for(uint16_t i=starting_address;i<starting_address+quantily_of_registers;i++){
+                REGISTER[i]=rx_data[7+i*2]<<8 |rx_data[8+i*2];
+              }
+
+            uint8_t tx_size=8;
+            uint8_t *tx_data=(uint8_t*)malloc(tx_size);
+            for(uint8_t i=0;i<8;i++){
+              tx_data[i]=rx_data[i];
+            }
+            ModRTU_TX();
+            for(uint8_t i=0;i<8;i++){
+              USART_Write(tx_data+i);
+              Timer0_StartTimer(&timer1);
+              }
+            free(tx_data);
+            Timer0_StartTimer(&timer2);
+            state=END_RESPONSE;
+        }
+      }
+    } 
   break;
   case ERROR_CYCLE:
     if(buf_available(&FIFO)){
