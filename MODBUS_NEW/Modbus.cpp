@@ -211,7 +211,7 @@ switch(state){
         uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
         if(CRC_calc==CRC_rx){
 		  uint16_t bits_quantily=(rx_data[4]<<8) | (rx_data[5]);
-		  if((bits_quantily==0) || (bits_quantily<32)){
+		  if((bits_quantily==0) || (bits_quantily>32)){
 			state=ERROR_CYCLE;
 			error_code=0x03;
 			break;
