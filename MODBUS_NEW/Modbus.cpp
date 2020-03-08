@@ -407,11 +407,6 @@ switch(state){
         uint16_t CRC_calc=ModRTU_CRC(rx_data,rx_counter-2);
           if(CRC_calc==CRC_rx){
             uint16_t quantily_of_registers=rx_data[4]<<8 | rx_data[5];
-
-            uint8_t data=(uint8_t)quantily_of_registers;
-            USART_Write(&data);
-            data=rx_data[6];
-            USART_Write(&data);
             if((quantily_of_registers<1 || quantily_of_registers>16)||((quantily_of_registers*2) != (rx_data[6]))){
               state=ERROR_CYCLE;
               error_code=QUANTILY_ERROR;
@@ -426,12 +421,14 @@ switch(state){
               for(uint16_t i=starting_address;i<starting_address+quantily_of_registers;i++){
                 REGISTER[i]=rx_data[7+i*2]<<8 |rx_data[8+i*2];
               }
-
             uint8_t tx_size=8;
             uint8_t *tx_data=(uint8_t*)malloc(tx_size);
-            for(uint8_t i=0;i<8;i++){
+            for(uint8_t i=0;i<5;i++){
               tx_data[i]=rx_data[i];
             }
+                        uint16_t CRC_tx=ModRTU_CRC(tx_data,6);
+            tx_data[tx_size-2]=CRC_tx & 0xFF; //LOW byte
+            tx_data[tx_size-1]=(CRC_tx>>8) & 0xFF; //HIGH byte
             ModRTU_TX();
             for(uint8_t i=0;i<8;i++){
               USART_Write(tx_data+i);
@@ -473,7 +470,6 @@ switch(state){
   break;
   case END_RESPONSE:
     if(Timer0_TimeIsOut(&timer2,frame_time)){
-      REGISTER[0]++;
       state=ADDRESS;
       rx_counter=0;
       ModRTU_RX();
