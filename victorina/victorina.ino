@@ -14,6 +14,8 @@
 #define Player2 2
 #define NO_ONE 3
 
+#define BLINC_TIMES 10
+#define SPEED_COLOUR 15
 
 uint8_t loop_state=0;
 uint8_t state_player=0;
@@ -72,12 +74,12 @@ void loop() {
     static uint8_t blink_counter1=0;
       switch(state_player){
         case 0:
-        if(millis()-time2>=200){
+        if(millis()-time2>=400){
           time2=millis();
           blink_counter1++;
-          writeRGB1(255*(blink_counter1%2),255,0);
+          writeRGB1(0,255*((blink_counter1+1)%2),255*(blink_counter1%2));
           writeRGB2(255,0,0);
-          if(blink_counter1>=6){
+          if(blink_counter1>=BLINC_TIMES){
             state_player=1;
             blink_counter1=0;
             }
@@ -92,12 +94,12 @@ void loop() {
     static uint8_t blink_counter2=0;
       switch(state_player){
         case 0:
-        if(millis()-time2>=200){
+        if(millis()-time2>=400){
           time2=millis();
           blink_counter2++;
-          writeRGB2(255*(blink_counter2%2),255,0);
+          writeRGB2(0,255*((blink_counter2+1)%2),255*(blink_counter2%2));
           writeRGB1(255,0,0);
-          if(blink_counter2>=6){
+          if(blink_counter2>=BLINC_TIMES){
             state_player=1;
             blink_counter2=0;
             }
@@ -111,7 +113,7 @@ void loop() {
     case NO_ONE:
       switch(state_player){
         case 0:
-        if(millis()-time2>=10){
+        if(millis()-time2>=SPEED_COLOUR){
           time2=millis();
           counter++;
           writeRGB1(0,255-counter,counter);
@@ -123,7 +125,7 @@ void loop() {
           }
         break;
         case 1:
-        if(millis()-time2>=5){
+        if(millis()-time2>=SPEED_COLOUR){
           time2=millis();
           counter++;
           writeRGB1(counter,0,255-counter);
@@ -135,7 +137,7 @@ void loop() {
           }
         break;
         case 2:
-        if(millis()-time2>=5){
+        if(millis()-time2>=SPEED_COLOUR){
           time2=millis();
           counter++;
           writeRGB1(255-counter,counter,0);
